@@ -1,4 +1,14 @@
-#pip install sunvox-dll-python
+## Usage
 
-pip install --ignore-installed  --install-option="--prefix=$(pwd)" SunVOSC
-pip install --upgrade pip enum34
+
+```
+python player.py test.sunvox
+```
+
+## Debugging info
+
+uncomment this in player.py
+
+```
+logging.basicConfig(level=logging.DEBUG)
+```
