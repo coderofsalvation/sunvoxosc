@@ -12,6 +12,7 @@ from pythonosc import osc_server
 if 'basestring' not in globals():
    basestring = str
 ENCODING = 'utf-8'
+open("mappings.txt","w").close() # empty mapping file
 log = logging.getLogger(__name__)
 #logging.basicConfig(level=logging.DEBUG)
 sys.path.append(os.path.dirname(__file__)+'/lib')
@@ -40,8 +41,12 @@ print('{} audio-modules loaded'.format(module_count))
 # see https://pypi.python.org/pypi/python-osc
 #
 dispatcher = dispatcher.Dispatcher()
+
 def mapOSC(addr,cb,id,info=""):
     print('initing OSC parameter: /{}'.format(id).ljust(60) + '{}'.format(info))
+    mappings = open("mappings.txt","a+")
+    mappings.write(str(addr) + "\t" + str(info) + "\n")
+    mappings.close()
     dispatcher.map(addr,cb,id)
 
 def play(unused_addr, args):
@@ -62,18 +67,30 @@ def note_off(sv,module_index,addr,args,channel=0,note=60):
     ctlvalue = 0
     slot.send_event(channel, sv.NOTECMD.NOTE_OFF, 0, module_index, ctl,ctlvalue )
 
+def ctl(sv,module_index,ctlnum,addr,args,value=0):
+    log.debug("incoming ctl: {}: {} {} mod:{}".format(addr,ctlnum,value,module_index))
+    slot.send_event(0, 0, 0, module_index, ctlnum, value)
+
+def sanitizeString(str):
+    return str.lower().replace(" ","_").replace("(","").replace(")","")
+
 mapOSC("/play", play, "play")
 for i in range(module_count):
+    nctrls = slot.get_number_of_module_ctls(i)
     modulename = slot.get_module_name(i).decode(ENCODING)
     if not len(modulename):
         continue
     log.debug('module {}: {}'.format(i,modulename))
-    id_on  = 'note_on/{}'.format(modulename)
-    id_off = 'note_off/{}'.format(modulename)
+    id_on  = sanitizeString('{}/note_on'.format(modulename))
+    id_off = sanitizeString('{}/note_off'.format(modulename))
     osc_note_on  = _.partial( note_on,  sunvox.api,1+i )
     osc_note_off = _.partial( note_off, sunvox.api,1+i )
     mapOSC('/{}'.format(id_on), osc_note_on, id_on,"[channel=0..64] [note=1..127] [velocity=127] [glide=2]")
     mapOSC('/{}'.format(id_off), osc_note_off, id_off,"[channel=0..64] [note=1..127]")
+    for j in range(nctrls):
+        id_ctl = sanitizeString( '{}/{}'.format(modulename,slot.get_module_ctl_name(i,j).decode(ENCODING)) )
+        osc_ctl  = _.partial( ctl, sunvox.api, 1+i, (1+j) << 8 )
+        mapOSC('/{}'.format(id_ctl), osc_ctl, id_ctl,"[value=0..37565]")
 
 print("special notenumbers:")
 print("    0   = EMPTY BUFFER")
@@ -87,9 +104,9 @@ print("  * 134 = PREV_TRACK")
 print("          ")
 print("      * = only applicable when module is a pattern/recursive")
 print("")
+print("wrote mappings.txt")
 
-server = osc_server.ThreadingOSCUDPServer(
-  ("127.0.0.1",9001), dispatcher)
+server = osc_server.ThreadingOSCUDPServer( ("0.0.0.0",9001), dispatcher)
 print("Serving OSC on {}".format(server.server_address))
 server.serve_forever()
 
