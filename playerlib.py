@@ -73,10 +73,19 @@ def play(file,debug):
         return str.lower().replace(" ","_").replace("(","").replace(")","")
 
     mapOSC("/play", play, "play")
+    spacemodules = False
+    for i in range(module_count):
+        modulename = slot.get_module_name(i).decode(ENCODING)
+        if modulename.endswith(' '):
+            spacemodules = True
+
+
     for i in range(module_count):
         nctrls = slot.get_number_of_module_ctls(i)
         modulename = slot.get_module_name(i).decode(ENCODING)
         if not len(modulename):
+            continue
+        if spacemodules and not modulename.endswith(' '):
             continue
         log.debug('module {}: {}'.format(i,modulename))
         id_on  = sanitizeString('{}/note_on'.format(modulename))
